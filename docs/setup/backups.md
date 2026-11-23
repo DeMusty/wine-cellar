@@ -56,6 +56,15 @@ different host, securely transfer the backup directory to that host.
    ```sh
    docker compose -f docker-compose.single.yml stop
    docker compose -f docker-compose.single.yml build
+   mkdir -p ./data/single-container
+   docker compose -f docker-compose.single.yml run --rm --no-deps --user 0:0 \
+     --entrypoint sh wine-cellar -c '
+       if [ -n "$(find /data -mindepth 1 -print -quit)" ]; then
+         echo "Data directory is not empty; refusing to prepare it." >&2
+         exit 1
+       fi
+       chown app:app /data && chmod 700 /data
+     '
    sh scripts/migrate-to-single.sh import ../wine-cellar-migration-backup
    docker compose -f docker-compose.single.yml up -d
    ```

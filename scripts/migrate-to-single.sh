@@ -82,8 +82,11 @@ case "$action" in
             echo "Stop the single-container service before importing." >&2
             exit 1
         fi
-        target_compose run --rm --no-deps -T init-data
         target_compose run --rm --no-deps -T --entrypoint sh wine-cellar -c '
+            if [ ! -w /data ] || [ ! -x /data ]; then
+                echo "The app user cannot write to /data. Set the directory permissions before importing." >&2
+                exit 1
+            fi
             if [ -n "$(find /data -mindepth 1 ! -type d -print -quit)" ]; then
                 echo "Target /data is not empty. Use a new empty directory." >&2
                 exit 1

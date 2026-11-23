@@ -34,14 +34,27 @@ transactions where possible but is not equivalent to PostgreSQL row locking.
    Set the optional email and AI settings if needed.
    The initial admin is created only if its username does not already exist;
    changing these variables later does not change an existing password.
-2. Build and start:
+2. Build the image, then prepare the data directory so the non-root app user
+   can write to it:
+
+   ```sh
+   docker compose -f docker-compose.single.yml build
+   mkdir -p ./data/single-container
+   docker compose -f docker-compose.single.yml run --rm --no-deps --user 0:0 \
+     --entrypoint sh wine-cellar -c 'chown app:app /data && chmod 700 /data'
+   ```
+
+   This changes only the directory itself, not existing files. If it already
+   contains data, ensure those files are writable by the app user too.
+
+3. Start the service:
 
    ```sh
    docker compose -f docker-compose.single.yml up -d --build
    docker compose -f docker-compose.single.yml logs -f
    ```
 
-3. Configure your existing Caddy to reverse-proxy the HTTPS hostname to
+4. Configure your existing Caddy to reverse-proxy the HTTPS hostname to
    `127.0.0.1:8086`. This address assumes Caddy runs on the Docker host. If it
    runs in a container, arrange network access to the single container instead;
    do not publish Redis or Gunicorn. The internal Caddy trusts forwarded headers
@@ -49,10 +62,8 @@ transactions where possible but is not equivalent to PostgreSQL row locking.
 
 The host directory `./data/single-container` is mounted at `/data` and contains
 the SQLite database (`db/`), uploads (`media/`), Redis append-only files
-(`redis/`), and the beat schedule (`beat/`). It survives ordinary container
-recreation. On first startup, an initialization container sets the empty data
-directory's ownership and permissions for the application. Existing data is not
-re-owned; fix its permissions if the app cannot write to it.
+(`redis/`), and the beat schedule (`beat/`). It survives ordinary container recreation. The app runs as a
+non-root user; manage the directory and existing files' permissions manually.
 
 If upgrading from the previous named-volume configuration, the directory does
 not automatically contain that volume's data. Follow

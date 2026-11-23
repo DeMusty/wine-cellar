@@ -143,7 +143,7 @@ def test_dev_export_refuses_running_writers(tmp_path):
     assert not backup.exists()
 
 
-def test_import_initializes_data_directory_before_using_it(tmp_path):
+def test_import_does_not_require_init_data_service(tmp_path):
     log = tmp_path / "docker.log"
     docker = tmp_path / "docker"
     docker.write_text("""#!/bin/sh
@@ -169,6 +169,5 @@ esac
     )
     assert result.returncode == 0, result.stderr
     calls = log.read_text()
-    assert calls.index("run --rm --no-deps -T init-data") < calls.index(
-        "run --rm --no-deps -T --entrypoint sh wine-cellar"
-    )
+    assert "init-data" not in calls
+    assert "run --rm --no-deps -T --entrypoint sh wine-cellar" in calls
