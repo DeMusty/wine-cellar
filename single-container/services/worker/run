@@ -4,7 +4,8 @@ cd /home/app/single-container
 exec /home/app/web/.venv/bin/celery \
     -A worker worker \
     --loglevel=info \
-    --pool=solo \
+    --pool=prefork \
     --concurrency=1 \
+    --max-tasks-per-child=1 \
     --beat \
     --schedule=/data/beat/celerybeat-schedule
