@@ -11,8 +11,8 @@ services:
       - "127.0.0.1:8086:8080"
     env_file:
       - .env.single
+    depends_on:
+      init-data:
+        condition: service_completed_successfully
     volumes:
-      - wine_cellar_data:/data
-
-volumes:
-  wine_cellar_data:
+      - ./data/single-container:/data

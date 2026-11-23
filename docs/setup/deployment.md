@@ -15,9 +15,10 @@ internal Caddy in one container. Your existing HTTPS reverse proxy remains in
 front; the internal Caddy serves static files and uploaded images. The usual
 PostgreSQL deployment remains available and is not modified.
 
-This is intended for a **fresh installation**, personal use and low
-concurrency. It does not import an existing PostgreSQL database. Run only one
-container against the volume: SQLite is a single-writer database, and Django's
+This is intended for personal use and low concurrency. To migrate an existing
+PostgreSQL deployment into a fresh data directory, see
+[Migration to the single container](backups.md#migration-to-the-single-container).
+Run only one container against the directory: SQLite is a single-writer database, and Django's
 `select_for_update` does not provide row locks on SQLite. Simultaneous writes
 can wait or fail with a database-locked error. The configuration serializes
 transactions where possible but is not equivalent to PostgreSQL row locking.
@@ -46,11 +47,19 @@ transactions where possible but is not equivalent to PostgreSQL row locking.
    do not publish Redis or Gunicorn. The internal Caddy trusts forwarded headers
    from private networks, so restrict access to its port to trusted proxies.
 
-The named volume mounted at `/data` contains the SQLite database (`db/`),
-uploads (`media/`), Redis append-only files (`redis/`), and the beat schedule
-(`beat/`). It survives ordinary container recreation. Do not remove the volume
-when updating. To update, back up first, obtain the desired application version
-and run the build/start command above again.
+The host directory `./data/single-container` is mounted at `/data` and contains
+the SQLite database (`db/`), uploads (`media/`), Redis append-only files
+(`redis/`), and the beat schedule (`beat/`). It survives ordinary container
+recreation. On first startup, an initialization container sets the empty data
+directory's ownership and permissions for the application. Existing data is not
+re-owned; fix its permissions if the app cannot write to it.
+
+If upgrading from the previous named-volume configuration, the directory does
+not automatically contain that volume's data. Follow
+[Moving an existing single-container volume](backups.md#moving-an-existing-single-container-volume)
+before starting the new configuration. Keep the directory when updating; back
+up first, obtain the desired application version and run the build/start
+command above again.
 
 Redis uses append-only persistence with an approximately one-second fsync
 interval. An abrupt failure can lose recent writes; persisted messages do not

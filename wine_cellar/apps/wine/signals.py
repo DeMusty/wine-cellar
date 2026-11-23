@@ -11,7 +11,7 @@ logger = logging.getLogger(__name__)
 
 @receiver(post_save, sender=WineImage)
 def generate_thumbnail(sender, instance, **kwargs):
-    if instance.image and not instance.thumbnail:
+    if not kwargs.get("raw", False) and instance.image and not instance.thumbnail:
         try:
             thumb_name = make_thumbnail(instance)
         except Exception:

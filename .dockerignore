@@ -4,6 +4,7 @@ node_modules/
 venv/
 .venv/
 datasets/
+data/single-container/
 .env
 .env.dev
 .env.prod

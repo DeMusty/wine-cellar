@@ -7,7 +7,7 @@ from wine_cellar.apps.storage.models import Storage
 
 @receiver(post_save, sender=User)
 def create_storage(sender, instance, created, **kwargs):
-    if created:
+    if created and not kwargs.get("raw", False):
         Storage.objects.create(
             name="Default Shelf",
             user=instance,
