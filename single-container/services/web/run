@@ -1,0 +1,7 @@
+#!/bin/sh
+cd /home/app/web
+exec /home/app/web/.venv/bin/gunicorn \
+    wine_cellar.conf.wsgi:application \
+    --bind 127.0.0.1:8000 \
+    --workers 1 \
+    --threads 1

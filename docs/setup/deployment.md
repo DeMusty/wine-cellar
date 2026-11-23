@@ -8,6 +8,69 @@ The easiest way to run Wine Cellar is by using docker compose as described below
     When using podman instead of docker you might have to add `:z` or `:Z` to the
     volumes to allow sharing them between containers and make SELinux happy.
 
+### Low-memory single container
+
+This alternative runs Django, Redis, one Celery worker, Celery beat, and an
+internal Caddy in one container. Your existing HTTPS reverse proxy remains in
+front; the internal Caddy serves static files and uploaded images. The usual
+PostgreSQL deployment remains available and is not modified.
+
+This is intended for a **fresh installation**, personal use and low
+concurrency. It does not import an existing PostgreSQL database. Run only one
+container against the volume: SQLite is a single-writer database, and Django's
+`select_for_update` does not provide row locks on SQLite. Simultaneous writes
+can wait or fail with a database-locked error. The configuration serializes
+transactions where possible but is not equivalent to PostgreSQL row locking.
+
+1. Copy `.env.single-sample` to `.env.single`. Set a long random `SECRET_KEY`,
+   a strong initial admin password, and the public HTTPS URL in
+   `DJANGO_SITE_URL` (for example, `https://wine.example.com`). The allowed
+   hostname and trusted CSRF origin are derived from this URL. For advanced
+   setups, `DJANGO_ALLOWED_HOSTS` and `DJANGO_CSRF_TRUSTED_ORIGINS` can still
+   be set explicitly as space-separated lists; each overrides its derived value.
+   Remove these variables from an existing `.env.single` to use the values
+   derived from `DJANGO_SITE_URL`.
+   Set the optional email and AI settings if needed.
+   The initial admin is created only if its username does not already exist;
+   changing these variables later does not change an existing password.
+2. Build and start:
+
+   ```sh
+   docker compose -f docker-compose.single.yml up -d --build
+   docker compose -f docker-compose.single.yml logs -f
+   ```
+
+3. Configure your existing Caddy to reverse-proxy the HTTPS hostname to
+   `127.0.0.1:8086`. This address assumes Caddy runs on the Docker host. If it
+   runs in a container, arrange network access to the single container instead;
+   do not publish Redis or Gunicorn. The internal Caddy trusts forwarded headers
+   from private networks, so restrict access to its port to trusted proxies.
+
+The named volume mounted at `/data` contains the SQLite database (`db/`),
+uploads (`media/`), Redis append-only files (`redis/`), and the beat schedule
+(`beat/`). It survives ordinary container recreation. Do not remove the volume
+when updating. To update, back up first, obtain the desired application version
+and run the build/start command above again.
+
+Redis uses append-only persistence with an approximately one-second fsync
+interval. An abrupt failure can lose recent writes; persisted messages do not
+guarantee that tasks already acknowledged or running will execute again.
+There is one Celery worker, so a long AI request delays other tasks. The
+web server also uses one worker. Beat runs as a child of the Celery worker to
+share memory. If Beat exits unexpectedly, the worker shuts down and Supervisor
+restarts it; a running task is allowed to finish first. Gunicorn preloads the
+application to share memory between its master and worker. The container health
+check reports failed processes, Redis, or the web endpoint;
+Docker reports an unhealthy state but does not automatically restart a
+container solely because it is unhealthy. The supervisor restarts failed
+processes and allows the worker time to finish on shutdown.
+
+See [Backups](backups.md#single-container-sqlite) for a consistent backup and
+restore procedure. RAM usage depends on the workload, especially AI tasks; no
+fixed memory limit is configured. Redis is not capped and can grow as queued
+jobs and results accumulate; monitor memory and disk usage with
+`docker stats`. AI tasks can use substantially more memory than idle usage.
+
 ### Docker Compose + Reverse Proxy
 
 #### Prerequisites

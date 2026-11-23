@@ -2,6 +2,48 @@
 
 It is recommended to make periodic backups and ideally also before major version upgrades.
 
+## Single-container SQLite
+
+These instructions apply to `docker-compose.single.yml`, not the PostgreSQL
+deployment described below. Stop the container first so the database, uploads,
+Redis data and beat schedule are consistent. Do not copy a live SQLite database
+file on its own.
+
+```sh
+docker compose -f docker-compose.single.yml stop
+docker compose -f docker-compose.single.yml cp -a wine-cellar:/data - > wine-cellar-backup.tar
+docker compose -f docker-compose.single.yml start
+```
+
+Keep the archive securely and separately retain your `.env.single` and secret
+key. Redis data can contain queued task payloads.
+
+To restore, stop the original deployment and extract the archive into a **new
+empty Docker volume**. Choose a volume name that does not already exist. For
+example:
+
+```sh
+docker compose -f docker-compose.single.yml stop
+docker volume create wine-cellar-restore
+docker run --rm -i --user 0:0 --entrypoint tar -v wine-cellar-restore:/data \
+  wine-cellar-single:local -xpf - -C / < wine-cellar-backup.tar
+```
+
+Then create a Compose override that points `wine_cellar_data` at the restored
+external volume:
+
+```yaml
+volumes:
+  wine_cellar_data:
+    external: true
+    name: wine-cellar-restore
+```
+
+Start with `docker compose -f docker-compose.single.yml -f <override-file> up -d`.
+Keep the original volume until the restored instance has been checked. Ensure
+the restored file ownership allows the image's `app` user to write to `/data`.
+Do not run both instances against the same volume.
+
 ## Backup
 
 ### Database Backup

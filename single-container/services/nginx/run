@@ -1,0 +1,10 @@
+#!/bin/sh
+mkdir -p \
+    /tmp/wine-cellar-nginx/client_body \
+    /tmp/wine-cellar-nginx/proxy \
+    /tmp/wine-cellar-nginx/fastcgi \
+    /tmp/wine-cellar-nginx/uwsgi \
+    /tmp/wine-cellar-nginx/scgi
+exec /usr/sbin/nginx \
+    -c /home/app/single-container/nginx.conf \
+    -g 'daemon off;'

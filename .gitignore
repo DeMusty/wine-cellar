@@ -13,6 +13,7 @@ media/
 .env.dev
 .env.prod
 .env.prod.db
+.env.single
 *.mo
 autopo.ooo
 .vscode/

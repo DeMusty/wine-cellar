@@ -1,0 +1,53 @@
+FROM python:3.14.10-slim-trixie@sha256:9aaa474097d094040649f2162a627c0049b408f52138d980916788d80f04802f AS builder
+
+ENV APP_HOME=/home/app/web \
+    UV_PROJECT_ENVIRONMENT=/home/app/web/.venv \
+    UV_PYTHON=/usr/local/bin/python3 \
+    UV_PYTHON_DOWNLOADS=never
+WORKDIR $APP_HOME
+COPY --from=ghcr.io/astral-sh/uv:0.11.14@sha256:1025398289b62de8269e70c45b91ffa37c373f38118d7da036fb8bb8efc85d97 /uv /uvx /bin/
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential curl gettext git libpq-dev ca-certificates \
+    && curl -fsSL https://deb.nodesource.com/setup_24.x | bash - \
+    && apt-get install -y --no-install-recommends nodejs \
+    && rm -rf /var/lib/apt/lists/*
+COPY pyproject.toml uv.lock README.md ./
+RUN uv sync --frozen --no-dev --group prod \
+    --no-install-package psycopg --no-install-package psycopg-c
+COPY package.json package-lock.json ./
+RUN npm ci
+COPY . .
+RUN npm run build:prod \
+    && export DJANGO_SETTINGS_MODULE=wine_cellar.conf.single_settings \
+       DJANGO_SITE_URL=https://localhost \
+       SECRET_KEY=build-only \
+    && .venv/bin/python manage.py collectstatic --noinput \
+    && .venv/bin/python manage.py compilemessages --ignore .venv --ignore node_modules --verbosity 0
+
+FROM python:3.14.10-slim-trixie@sha256:9aaa474097d094040649f2162a627c0049b408f52138d980916788d80f04802f
+ENV HOME=/home/app \
+    APP_HOME=/home/app/web \
+    PATH=/home/app/web/.venv/bin:$PATH \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    DJANGO_SETTINGS_MODULE=wine_cellar.conf.single_settings
+WORKDIR $APP_HOME
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl nginx-light redis-server runit \
+    && rm -rf /var/lib/apt/lists/* \
+    && addgroup --system app && adduser --system --ingroup app app \
+    && mkdir -p /data/db /data/media /data/redis /data/beat /home/app/web/staticfiles \
+    && chown -R app:app /data /home/app
+COPY --chown=app:app . /home/app/web
+COPY --from=builder --chown=app:app /home/app/web/.venv /home/app/web/.venv
+COPY --from=builder --chown=app:app /home/app/web/wine_cellar/static /home/app/web/wine_cellar/static
+COPY --from=builder --chown=app:app /home/app/web/webpack-stats.json /home/app/web/webpack-stats.json
+COPY --from=builder --chown=app:app /home/app/web/staticfiles /home/app/web/staticfiles
+COPY --from=builder --chown=app:app /home/app/web/locale /home/app/web/locale
+COPY --chown=app:app single-container/ /home/app/single-container/
+COPY --chmod=755 --chown=app:app single-container/services/ /home/app/services/
+USER app
+EXPOSE 8080
+HEALTHCHECK --interval=30s --timeout=10s --start-period=120s --retries=3 \
+    CMD sh /home/app/single-container/healthcheck.sh
+ENTRYPOINT ["sh", "/home/app/single-container/entrypoint.sh"]
